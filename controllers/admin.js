@@ -13,13 +13,22 @@ exports.postAddProduct = (req, res, next) => {
   const imageUrl = req.body.imageUrl;
   const price = req.body.price;
   const description = req.body.description;
-  const product = new Product(null, title, imageUrl, description, price);
   
-  product.save()
-    .then(() => {
-      res.redirect('/');
+  // MAGIC METHOD: req.user.createProduct()
+  // Because of associations, Sequelize automatically adds the userId to this new product in the DB!
+  req.user.createProduct({
+    title: title,
+    price: price,
+    imageUrl: imageUrl,
+    description: description
+  })
+    .then(result => {
+      console.log('Created Product');
+      res.redirect('/admin/products');
     })
-    .catch(err => console.log(err));
+    .catch(err => {
+      console.log(err);
+    });
 };
 
 exports.getEditProduct = (req, res, next) => {
@@ -28,16 +37,18 @@ exports.getEditProduct = (req, res, next) => {
     return res.redirect('/');
   }
   const prodId = req.params.productId;
-  Product.findById(prodId)
-    .then(([product]) => {
-      if (!product[0]) {
+  
+  // Sequelize findByPk replaces 'SELECT * FROM products WHERE id = ?'
+  Product.findByPk(prodId)
+    .then(product => {
+      if (!product) {
         return res.redirect('/');
       }
       res.render('admin/edit-product', {
         pageTitle: 'Edit Product',
         path: '/admin/edit-product',
         editing: editMode,
-        product: product[0]
+        product: product
       });
     })
     .catch(err => console.log(err));
@@ -49,29 +60,31 @@ exports.postEditProduct = (req, res, next) => {
   const updatedPrice = req.body.price;
   const updatedImageUrl = req.body.imageUrl;
   const updatedDesc = req.body.description;
-
-  // Create new product instance with the existing ID
-  const updatedProduct = new Product(
-    prodId,
-    updatedTitle,
-    updatedImageUrl,
-    updatedDesc,
-    updatedPrice
-  );
-
-  // Call save() which will trigger the SQL UPDATE command
-  updatedProduct.save()
-    .then(() => {
+  
+  Product.findByPk(prodId)
+    .then(product => {
+      // Modify the object properties
+      product.title = updatedTitle;
+      product.price = updatedPrice;
+      product.description = updatedDesc;
+      product.imageUrl = updatedImageUrl;
+      
+      // Save it back to the database
+      return product.save();
+    })
+    .then(result => {
       console.log('UPDATED PRODUCT!');
       res.redirect('/admin/products');
     })
     .catch(err => console.log(err));
 };
+
 exports.getProducts = (req, res, next) => {
-  Product.fetchAll()
-    .then(([rows, fieldData]) => {
+  // Sequelize findAll replaces 'SELECT * FROM products'
+  Product.findAll()
+    .then(products => {
       res.render('admin/products', {
-        prods: rows,
+        prods: products,
         pageTitle: 'Admin Products',
         path: '/admin/products'
       });
@@ -81,8 +94,14 @@ exports.getProducts = (req, res, next) => {
 
 exports.postDeleteProduct = (req, res, next) => {
   const prodId = req.body.productId;
-  Product.deleteById(prodId)
-    .then(() => {
+  
+  Product.findByPk(prodId)
+    .then(product => {
+      // Sequelize 'destroy' replaces the 'DELETE FROM' SQL query
+      return product.destroy();
+    })
+    .then(result => {
+      console.log('DESTROYED PRODUCT');
       res.redirect('/admin/products');
     })
     .catch(err => console.log(err));

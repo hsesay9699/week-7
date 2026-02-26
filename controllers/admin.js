@@ -1,5 +1,8 @@
 const Product = require('../models/product');
 
+// Updated the admin controller to use the new custom MongoDB Product class.
+// Replaced all Sequelize magic methods with our custom MongoDB CRUD operations.
+
 exports.getAddProduct = (req, res, next) => {
   res.render('admin/edit-product', {
     pageTitle: 'Add Product',
@@ -14,14 +17,13 @@ exports.postAddProduct = (req, res, next) => {
   const price = req.body.price;
   const description = req.body.description;
   
-  // MAGIC METHOD: req.user.createProduct()
-  // Because of associations, Sequelize automatically adds the userId to this new product in the DB!
-  req.user.createProduct({
-    title: title,
-    price: price,
-    imageUrl: imageUrl,
-    description: description
-  })
+  // Instantiating a new Product object and calling our custom save() method
+  // which uses MongoDB's insertOne() behind the scenes.
+  // We pass 'null' for the product ID since it's a new product, 
+  // and req.user._id to manually relate this product to the logged-in user.
+  const product = new Product(title, price, description, imageUrl, null, req.user._id);
+  
+  product.save()
     .then(result => {
       console.log('Created Product');
       res.redirect('/admin/products');
@@ -37,9 +39,7 @@ exports.getEditProduct = (req, res, next) => {
     return res.redirect('/');
   }
   const prodId = req.params.productId;
-  
-  // Sequelize findByPk replaces 'SELECT * FROM products WHERE id = ?'
-  Product.findByPk(prodId)
+  Product.findById(prodId)
     .then(product => {
       if (!product) {
         return res.redirect('/');
@@ -60,18 +60,16 @@ exports.postEditProduct = (req, res, next) => {
   const updatedPrice = req.body.price;
   const updatedImageUrl = req.body.imageUrl;
   const updatedDesc = req.body.description;
+
+  const product = new Product(
+    updatedTitle,
+    updatedPrice,
+    updatedDesc,
+    updatedImageUrl,
+    prodId
+  );
   
-  Product.findByPk(prodId)
-    .then(product => {
-      // Modify the object properties
-      product.title = updatedTitle;
-      product.price = updatedPrice;
-      product.description = updatedDesc;
-      product.imageUrl = updatedImageUrl;
-      
-      // Save it back to the database
-      return product.save();
-    })
+  product.save()
     .then(result => {
       console.log('UPDATED PRODUCT!');
       res.redirect('/admin/products');
@@ -80,8 +78,7 @@ exports.postEditProduct = (req, res, next) => {
 };
 
 exports.getProducts = (req, res, next) => {
-  // Sequelize findAll replaces 'SELECT * FROM products'
-  Product.findAll()
+  Product.fetchAll()
     .then(products => {
       res.render('admin/products', {
         prods: products,
@@ -94,13 +91,8 @@ exports.getProducts = (req, res, next) => {
 
 exports.postDeleteProduct = (req, res, next) => {
   const prodId = req.body.productId;
-  
-  Product.findByPk(prodId)
-    .then(product => {
-      // Sequelize 'destroy' replaces the 'DELETE FROM' SQL query
-      return product.destroy();
-    })
-    .then(result => {
+  Product.deleteById(prodId)
+    .then(() => {
       console.log('DESTROYED PRODUCT');
       res.redirect('/admin/products');
     })

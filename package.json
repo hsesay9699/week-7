@@ -12,7 +12,6 @@
     "body-parser": "^2.2.2",
     "ejs": "^4.0.1",
     "express": "^5.2.1",
-    "mysql2": "^3.17.1",
-    "sequelize": "^6.37.7"
+    "mongodb": "^7.1.0"
   }
 }
